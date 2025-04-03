@@ -1,0 +1,90 @@
+name: Soccer Predictor CI
+
+on:
+  push:
+    branches: [ "main", "develop" ]
+  pull_request:
+    branches: [ "main", "develop" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.8", "3.9", "3.10"]
+
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v3
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install flake8 pytest
+        pip install torch numpy pandas scikit-learn beautifulsoup4 requests
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+    
+    - name: Lint with flake8
+      run: |
+        # stop the build if there are Python syntax errors or undefined names
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        # exit-zero treats all errors as warnings
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+    
+    - name: Run tests
+      run: |
+        pytest
+
+    - name: Check model training
+      run: |
+        # Add a small test training run to ensure the model works
+        python -c "
+        import torch
+        import numpy as np
+        from soccer_predictor.model import SoccerPredictor
+        
+        # Create dummy data
+        X = torch.randn(100, 8)
+        y = torch.randn(100, 2)
+        
+        # Test model creation and forward pass
+        model = SoccerPredictor(input_size=8)
+        output = model(X)
+        assert output.shape == (100, 2)
+        "
+
+    - name: Cache dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v3
+      with:
+        python-version: "3.10"
+    
+    - name: Build package
+      run: |
+        pip install build
+        python -m build
+    
+    - name: Store artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: soccer-predictor-package
+        path: dist/
