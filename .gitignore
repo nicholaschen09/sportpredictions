@@ -1,1 +1,2 @@
-coverage
+.coverage
+test_full_pipeline.cpython-313-pytest-8.3.5.pyc
